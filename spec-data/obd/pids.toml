@@ -1,0 +1,25 @@
+[[mode1]]
+pid = 0x04
+name = "CalculatedEngineLoad"
+unit = "%"
+
+[[mode1]]
+pid = 0x05
+name = "EngineCoolantTemperature"
+unit = "C"
+
+[[mode1]]
+pid = 0x0C
+name = "EngineRpm"
+unit = "rpm"
+
+[[mode1]]
+pid = 0x0D
+name = "VehicleSpeed"
+unit = "km/h"
+
+[[mode9]]
+pid = 0x02
+name = "Vin"
+unit = ""
+

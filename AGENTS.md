@@ -69,6 +69,18 @@ and quality bars.
 - Must not own Linux SocketCAN, ISO-TP socket, or J1939 socket bindings.
 - Should compile without Linux-specific dependencies in its public surface.
 
+### `cantools-codec`
+
+- Owns portable capture and log format codecs.
+- Translates between the canonical `cantools-core` capture model and external
+  file formats.
+- Treats ASAM MDF `.mf4` as the primary capture format for `cantools-rs`.
+- Supports `.asc` and `.blf` as second-class compatibility layers for import
+  and export where practical.
+- Must report fidelity loss explicitly when an external format cannot preserve
+  the full internal capture model.
+- Must not become the home for the canonical in-memory capture model.
+
 ### `cantools-socketcan`
 
 - Owns all Linux-specific CAN backend code.
@@ -140,12 +152,14 @@ and quality bars.
 ## Dependency Intent
 
 - `cantools-core` is the portable foundation.
-- `cantools-socketcan`, `cantools-dbc`, `cantools-isotp`, and `cantools-j1939`
-  depend on `cantools-core`.
+- `cantools-codec`, `cantools-socketcan`, `cantools-dbc`, `cantools-isotp`, and
+  `cantools-j1939` depend on `cantools-core`.
 - `cantools-uds` depends on `cantools-isotp`.
 - `cantools-obd` depends on `cantools-uds`.
 - `cantools-cli` integrates the library crates above and should depend on
   `cantools-tui` only through an optional feature.
+- `cantools-cli` and `cantools-tui` may depend on `cantools-codec` for capture
+  import, export, recording, and replay.
 - `cantools-tui` may depend on backend and runtime crates needed for interactive
   monitoring.
 - Portable crates must not depend on `cantools-socketcan`; backend dependencies
@@ -277,8 +291,12 @@ and quality bars.
 ## Capture, Replay, and Interoperability
 
 - Internal capture models should be richer than any one external file format.
+- JSON is not a preferred capture or replay log format in this project.
 - Capture data should be able to carry timestamps, interface metadata, direction,
   raw frame data, error events, and optional decode annotations.
+- ASAM MDF `.mf4` is the primary persisted capture format.
+- `.asc` and `.blf` support exists as interoperability layers, not as the
+  canonical internal representation.
 - Import and export with can-utils-compatible formats should be supported where
   practical for interoperability with existing Linux CAN tooling.
 - External format compatibility must not force lossy internal APIs. If an export
@@ -315,5 +333,7 @@ and quality bars.
   disable it in smaller feature-gated builds.
 - It should document backend expectations, DBC usage, and major feature areas
   such as CAN FD, DBC decoding, J1939, UDS, and OBD.
+- It should describe `.mf4` as the preferred capture format and `.asc` / `.blf`
+  as compatibility paths.
 - It should explain interoperability with existing Linux CAN tooling without
   presenting compatibility aliases as the primary UX.

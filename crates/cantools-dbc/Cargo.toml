@@ -1,0 +1,16 @@
+[package]
+name = "cantools-dbc"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+can-dbc.workspace = true
+cantools-core = { path = "../cantools-core" }
+thiserror.workspace = true
+

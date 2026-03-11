@@ -1,0 +1,17 @@
+[package]
+name = "cantools-tui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow.workspace = true
+cantools-core = { path = "../cantools-core" }
+cantools-socketcan = { path = "../cantools-socketcan" }
+crossterm.workspace = true
+ratatui.workspace = true

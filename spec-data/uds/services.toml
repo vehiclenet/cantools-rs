@@ -1,0 +1,28 @@
+[[services]]
+sid = 0x10
+name = "DiagnosticSessionControl"
+
+[[services]]
+sid = 0x11
+name = "EcuReset"
+
+[[services]]
+sid = 0x22
+name = "ReadDataByIdentifier"
+
+[[services]]
+sid = 0x3E
+name = "TesterPresent"
+
+[[negative_responses]]
+code = 0x11
+name = "ServiceNotSupported"
+
+[[negative_responses]]
+code = 0x12
+name = "SubFunctionNotSupported"
+
+[[negative_responses]]
+code = 0x22
+name = "ConditionsNotCorrect"
+

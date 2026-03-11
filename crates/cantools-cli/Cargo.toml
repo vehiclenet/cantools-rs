@@ -1,0 +1,35 @@
+[package]
+name = "cantools-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[features]
+default = ["monitor"]
+monitor = ["dep:cantools-tui"]
+
+[dependencies]
+anyhow.workspace = true
+can-dbc.workspace = true
+cantools-codec = { path = "../cantools-codec" }
+cantools-core = { path = "../cantools-core" }
+cantools-dbc = { path = "../cantools-dbc" }
+cantools-j1939 = { path = "../cantools-j1939" }
+cantools-obd = { path = "../cantools-obd" }
+cantools-socketcan = { path = "../cantools-socketcan" }
+cantools-tui = { path = "../cantools-tui", optional = true }
+cantools-uds = { path = "../cantools-uds" }
+clap.workspace = true
+clap_complete.workspace = true
+clap_mangen.workspace = true
+serde.workspace = true
+toml.workspace = true
+
+[[bin]]
+name = "cantools"
+path = "src/main.rs"

@@ -1,0 +1,12 @@
+[[pgns]]
+pgn = 0x00F004
+name = "ElectronicEngineController1"
+
+[[pgns]]
+pgn = 0x00FEE9
+name = "VehicleDirectionSpeed"
+
+[[pgns]]
+pgn = 0x00FEEB
+name = "ComponentIdentification"
+

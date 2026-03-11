@@ -1,0 +1,19 @@
+[package]
+name = "cantools-codec"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+ablf.workspace = true
+binrw.workspace = true
+byteorder.workspace = true
+cantools-core = { path = "../cantools-core" }
+mf4-rs.workspace = true
+regex.workspace = true
+thiserror.workspace = true
