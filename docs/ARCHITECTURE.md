@@ -15,6 +15,11 @@ the concrete implementation choices made to bootstrap the repository.
 - Local Linux validation runs through OrbStack's `debian` machine.
 - `xtask` owns repository maintenance commands such as placeholder checks and
   fixture/codegen workflows.
+- GitHub-hosted CI does not provision `vcan`, so hosted jobs validate portable
+  checks only while SocketCAN runtime checks remain local.
+- A tracked `pre-push` hook gates pushes to `main` on the full local suite,
+  including OrbStack Debian build, test, `cargo deny`, and live `vcan0` smoke
+  coverage.
 
 ## Capture model and codec split
 
@@ -31,3 +36,19 @@ The CLI keeps `monitor` behind a feature so reduced builds can omit TUI
 dependencies. When the feature is disabled the command fails clearly instead of
 silently disappearing from help text.
 
+## CI and local push gating
+
+Hosted GitHub CI is intentionally weaker than the local `main` push gate. The
+hosted macOS job covers formatting, Clippy, and workspace tests. The hosted
+Linux job covers build, test, and `cargo deny`, but does not attempt runtime
+SocketCAN validation because GitHub-hosted runner kernels do not provide a
+usable `vcan` path for this project.
+
+The authoritative local gate lives in `xtask`:
+
+- `ci-hosted` mirrors the hosted checks that run on the developer machine.
+- `ci-linux-local` provisions `vcan0` in OrbStack `debian`, then runs Linux
+  build, test, `cargo deny`, and a live `cantools dump`/`cantools send` smoke
+  test.
+- `ci-all-local` runs both suites and is the command invoked by `.githooks/pre-push`
+  when a push targets `main`.

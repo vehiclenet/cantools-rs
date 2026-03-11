@@ -31,9 +31,27 @@ cargo run -p cantools-cli -- monitor --interface vcan0
 ## Development
 
 - Portable crates and most CLI logic build on macOS.
-- Linux-only backend work and `vcan` integration tests can run via OrbStack:
+- GitHub-hosted CI intentionally validates portable build, lint, and unit-test
+  coverage only. Runtime SocketCAN coverage is local until a self-hosted Linux
+  runner exists.
+- Install the tracked Git hook to gate pushes to `main` on the full local CI
+  suite:
 
 ```sh
-orb -m debian cargo test --workspace
+cargo run -p xtask -- install-hooks
 ```
 
+- Run the same full local gate manually when needed:
+
+```sh
+cargo run -p xtask -- ci-all-local
+```
+
+- Linux-only backend work and `vcan` validation run via OrbStack `debian`:
+
+```sh
+orb -m debian -u root sh -lc 'modprobe vcan || true; ip link add dev vcan0 type vcan || true; ip link set up vcan0'
+orb -m debian sh -lc '. ~/.cargo/env && cd /Users/dylan/Developer/vehiclenet/cantools-rs && cargo test --workspace'
+orb -m debian sh -lc '. ~/.cargo/env && cd /Users/dylan/Developer/vehiclenet/cantools-rs && target/debug/cantools dump --interface vcan0 --count 1'
+orb -m debian sh -lc '. ~/.cargo/env && cd /Users/dylan/Developer/vehiclenet/cantools-rs && target/debug/cantools send --interface vcan0 --id 123 --data 01020304'
+```

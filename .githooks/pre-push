@@ -1,0 +1,21 @@
+#!/bin/sh
+set -eu
+
+gate_main=0
+
+while read -r local_ref local_sha remote_ref remote_sha
+do
+    if [ "${remote_ref}" = "refs/heads/main" ]; then
+        gate_main=1
+    fi
+done
+
+if [ "${gate_main}" -eq 0 ]; then
+    exit 0
+fi
+
+repo_root=$(git rev-parse --show-toplevel)
+cd "${repo_root}"
+
+echo "pre-push: running full local CI gate for pushes to main"
+exec cargo run -p xtask -- ci-all-local

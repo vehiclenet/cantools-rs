@@ -15,13 +15,11 @@ jobs:
       - run: cargo test --workspace
 
   linux:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - run: sudo modprobe vcan
-      - run: sudo ip link add dev vcan0 type vcan || true
-      - run: sudo ip link set up vcan0
+      - run: cargo install cargo-deny --locked
       - run: cargo build --workspace
       - run: cargo test --workspace
       - run: cargo deny check

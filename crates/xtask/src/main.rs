@@ -3,10 +3,12 @@
 use std::{
     fs,
     path::{Path, PathBuf},
-    process::Command,
+    process::{Command, Output, Stdio},
+    thread,
+    time::Duration,
 };
 
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use regex::Regex;
 use serde::Deserialize;
 
@@ -63,13 +65,230 @@ fn write_if_changed(path: &Path, content: &str) -> Result<()> {
     Ok(())
 }
 
-fn run_command(args: &[&str]) -> Result<()> {
-    let status = Command::new(args[0]).args(&args[1..]).status()?;
+fn command_string(program: &str, args: &[&str]) -> String {
+    std::iter::once(program)
+        .chain(args.iter().copied())
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn run_command_in(root: &Path, program: &str, args: &[&str]) -> Result<()> {
+    let status = Command::new(program)
+        .current_dir(root)
+        .args(args)
+        .status()
+        .with_context(|| format!("failed to start {}", command_string(program, args)))?;
     if status.success() {
         Ok(())
     } else {
-        bail!("command failed: {}", args.join(" "))
+        bail!("command failed: {}", command_string(program, args))
     }
+}
+
+fn command_output_in(root: &Path, program: &str, args: &[&str]) -> Result<Output> {
+    Command::new(program)
+        .current_dir(root)
+        .args(args)
+        .output()
+        .with_context(|| format!("failed to start {}", command_string(program, args)))
+}
+
+fn shell_quote(path: &Path) -> String {
+    format!("'{}'", path.display().to_string().replace('\'', "'\\''"))
+}
+
+fn orb_repo_script(root: &Path, command: &str) -> String {
+    format!(
+        "if [ -f \"$HOME/.cargo/env\" ]; then . \"$HOME/.cargo/env\"; fi; cd {} && {}",
+        shell_quote(root),
+        command
+    )
+}
+
+fn orb_args<'a>(user: Option<&'a str>, script: &'a str) -> Vec<&'a str> {
+    let mut args = vec!["-m", "debian"];
+    if let Some(user) = user {
+        args.push("-u");
+        args.push(user);
+    }
+    args.push("sh");
+    args.push("-lc");
+    args.push(script);
+    args
+}
+
+fn run_orb_script(root: &Path, user: Option<&str>, script: &str) -> Result<()> {
+    let wrapped = orb_repo_script(root, script);
+    let args = orb_args(user, &wrapped);
+    run_command_in(root, "orb", &args)
+}
+
+fn orb_output(root: &Path, user: Option<&str>, script: &str) -> Result<Output> {
+    let wrapped = orb_repo_script(root, script);
+    let args = orb_args(user, &wrapped);
+    command_output_in(root, "orb", &args)
+}
+
+fn ensure_orb(root: &Path) -> Result<()> {
+    let output = command_output_in(root, "orb", &["--help"])
+        .context("OrbStack CLI is required for local Linux validation")?;
+    if output.status.success() {
+        Ok(())
+    } else {
+        bail!(
+            "OrbStack CLI is installed but unavailable:\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        )
+    }
+}
+
+fn ensure_orb_machine(root: &Path) -> Result<()> {
+    let output = orb_output(root, None, "true")
+        .context("OrbStack machine `debian` is required for local Linux validation")?;
+    if output.status.success() {
+        Ok(())
+    } else {
+        bail!(
+            "OrbStack machine `debian` is unavailable:\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        )
+    }
+}
+
+fn ensure_orb_cargo_deny(root: &Path) -> Result<()> {
+    let output = orb_output(root, None, "cargo deny --version")
+        .context("failed to probe cargo-deny in OrbStack Debian")?;
+    if output.status.success() {
+        Ok(())
+    } else {
+        bail!(
+            "cargo-deny is required inside OrbStack Debian for `ci-linux-local`.\nInstall it with:\norb -m debian sh -lc 'if [ -f \"$HOME/.cargo/env\" ]; then . \"$HOME/.cargo/env\"; fi; cargo install cargo-deny --locked'\n\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        )
+    }
+}
+
+fn provision_vcan(root: &Path) -> Result<()> {
+    run_orb_script(
+        root,
+        Some("root"),
+        "modprobe vcan || true; ip link add dev vcan0 type vcan || true; ip link set up vcan0",
+    )
+    .context("failed to provision vcan0 in OrbStack Debian")
+}
+
+fn run_socketcan_smoke_test(root: &Path) -> Result<()> {
+    let dump_script = orb_repo_script(
+        root,
+        "timeout 20s target/debug/cantools dump --interface vcan0 --count 1",
+    );
+    let dump = Command::new("orb")
+        .current_dir(root)
+        .args(["-m", "debian", "sh", "-lc", &dump_script])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .context("failed to start SocketCAN smoke-test receiver in OrbStack Debian")?;
+
+    // Give the receiver a moment to bind before the sender injects traffic.
+    thread::sleep(Duration::from_secs(1));
+
+    let send_output = orb_output(
+        root,
+        None,
+        "target/debug/cantools send --interface vcan0 --id 123 --data 01020304",
+    )
+    .context("failed to send SocketCAN smoke-test frame in OrbStack Debian")?;
+    if !send_output.status.success() {
+        bail!(
+            "SocketCAN smoke-test sender failed:\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&send_output.stdout),
+            String::from_utf8_lossy(&send_output.stderr)
+        );
+    }
+
+    let dump_output = dump
+        .wait_with_output()
+        .context("failed waiting for SocketCAN smoke-test receiver")?;
+    if !dump_output.status.success() {
+        bail!(
+            "SocketCAN smoke-test receiver failed:\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&dump_output.stdout),
+            String::from_utf8_lossy(&dump_output.stderr)
+        );
+    }
+
+    let receiver_stdout = String::from_utf8_lossy(&dump_output.stdout);
+    if !receiver_stdout.contains("123 [ 4] 01 02 03 04") {
+        bail!(
+            "SocketCAN smoke-test receiver did not report the injected frame:\n{}",
+            receiver_stdout
+        );
+    }
+
+    Ok(())
+}
+
+fn ci_hosted(root: &Path) -> Result<()> {
+    run_command_in(root, "cargo", &["fmt", "--check"])?;
+    run_command_in(
+        root,
+        "cargo",
+        &[
+            "clippy",
+            "--workspace",
+            "--all-targets",
+            "--",
+            "-D",
+            "warnings",
+        ],
+    )?;
+    run_command_in(root, "cargo", &["test", "--workspace"])?;
+    Ok(())
+}
+
+fn ci_linux_local(root: &Path) -> Result<()> {
+    ensure_orb(root)?;
+    ensure_orb_machine(root)?;
+    ensure_orb_cargo_deny(root)?;
+    provision_vcan(root)?;
+    run_orb_script(root, None, "cargo build --workspace")?;
+    run_orb_script(root, None, "cargo test --workspace")?;
+    run_orb_script(root, None, "cargo deny check")?;
+    run_socketcan_smoke_test(root)?;
+    Ok(())
+}
+
+fn ci_all_local(root: &Path) -> Result<()> {
+    ci_hosted(root)?;
+    ci_linux_local(root)?;
+    Ok(())
+}
+
+fn install_hooks(root: &Path) -> Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+
+        let hook_path = root.join(".githooks/pre-push");
+        let mut permissions = fs::metadata(&hook_path)
+            .with_context(|| format!("missing hook {}", hook_path.display()))?
+            .permissions();
+        permissions.set_mode(0o755);
+        fs::set_permissions(&hook_path, permissions)
+            .with_context(|| format!("failed to update mode for {}", hook_path.display()))?;
+    }
+
+    run_command_in(root, "git", &["config", "core.hooksPath", ".githooks"])?;
+    let output = command_output_in(root, "git", &["config", "--get", "core.hooksPath"])?;
+    if !output.status.success() {
+        bail!("failed to read core.hooksPath after installation");
+    }
+    println!(
+        "Configured core.hooksPath={}",
+        String::from_utf8_lossy(&output.stdout).trim()
+    );
+    Ok(())
 }
 
 fn codegen(root: &Path) -> Result<()> {
@@ -253,15 +472,15 @@ fn main() -> Result<()> {
     match args.next().as_deref() {
         Some("codegen") => codegen(&root),
         Some("check-placeholders") => check_placeholders(&root),
-        Some("ci") => {
-            run_command(&["cargo", "fmt", "--check"])?;
-            run_command(&["cargo", "check", "--workspace"])?;
-            run_command(&["cargo", "test", "--workspace"])?;
-            check_placeholders(&root)
-        }
+        Some("ci-hosted") => ci_hosted(&root),
+        Some("ci-linux-local") => ci_linux_local(&root),
+        Some("ci-all-local") | Some("ci") => ci_all_local(&root),
+        Some("install-hooks") => install_hooks(&root),
         Some(other) => bail!("unknown xtask command {other}"),
         None => {
-            eprintln!("usage: cargo run -p xtask -- <codegen|check-placeholders|ci>");
+            eprintln!(
+                "usage: cargo run -p xtask -- <codegen|check-placeholders|ci-hosted|ci-linux-local|ci-all-local|ci|install-hooks>"
+            );
             Ok(())
         }
     }
