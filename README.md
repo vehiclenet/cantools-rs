@@ -55,3 +55,22 @@ orb -m debian sh -lc '. ~/.cargo/env && cd /Users/dylan/Developer/vehiclenet/can
 orb -m debian sh -lc '. ~/.cargo/env && cd /Users/dylan/Developer/vehiclenet/cantools-rs && target/debug/cantools dump --interface vcan0 --count 1'
 orb -m debian sh -lc '. ~/.cargo/env && cd /Users/dylan/Developer/vehiclenet/cantools-rs && target/debug/cantools send --interface vcan0 --id 123 --data 01020304'
 ```
+
+## License
+
+Copyright 2026 Dylan Walker Brown
+
+Licensed under either of
+
+ * Apache License, Version 2.0
+   ([LICENSE-APACHE](LICENSE-APACHE) or <http://www.apache.org/licenses/LICENSE-2.0>)
+ * MIT license
+   ([LICENSE-MIT](LICENSE-MIT) or <http://opensource.org/licenses/MIT>)
+
+at your option.
+
+## Contribution
+
+Unless you explicitly state otherwise, any contribution intentionally submitted
+for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
+dual licensed as above, without any additional terms or conditions.
